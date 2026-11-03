@@ -7,21 +7,21 @@
 
 window.WEDDING_INVITATION = {
   // 1. 新郎与新娘信息（占位符）
-  heroName: '新郎&新娘',
+  heroName: '许璟恒 & 李喆',
   englishName: 'CHEFS OF HONOR',
 
-  // 2. 时间：dateTime 用于倒计时，必须保持 2030-10-01T18:30:00+08:00 这种格式
-  dateTime: '2030-10-01T18:30:00+08:00',
-  dateLabel: '2030年10月1日 · 星期二',
-  dateShort: '2030.10.01',
-  timeLabel: '18:30',
+  // 2. 时间：dateTime 用于倒计时，必须保持 2027-01-16T15:00:00+08:00 这种格式
+  dateTime: '2027-01-16T15:00:00+08:00',
+  dateLabel: '2027年1月16日 · 星期六',
+  dateShort: '2027.01.16',
+  timeLabel: '15:00',
 
   // 3. 地点与导航
-  venue: '示例市婚礼宴会中心 · 主厨大厅',
-  venueShort: '示例市婚礼宴会中心',
+  venue: '满山丘Fullhills Cafe · 广东省广州市黄埔区天鹅路南二巷一号',
+  venueShort: '满山丘Fullhills Cafe',
   coordinateLabel: 'WEDDING KITCHEN HQ',
-  transport: '地铁 1 号线 A 口步行 5 分钟，建议绿色出行。',
-  mapUrl: 'https://ditu.amap.com/',
+  transport: '点击下方「打开地图导航」即可一键规划路线，建议绿色出行。',
+  mapUrl: 'https://surl.amap.com/iA4IPgO9nd',
 
   // 4. 主文案
   questTitle: '解锁厨房婚礼',
