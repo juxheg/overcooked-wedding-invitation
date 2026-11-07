@@ -60,5 +60,9 @@ window.WEDDING_INVITATION = {
   musicUrl: './assets/bgm.m4a',
   musicHint: '点击播放 / 关闭官方音乐',
 
-  // 9. 宾客登记仅为本机演示：内容只保存在访客自己的浏览器中，不会上传
+  // 9. 宾客登记：
+  //    留空 '' = 仅本机演示，内容只保存在访客自己的浏览器中，不会上传（模板默认）。
+  //    部署到 EdgeOne Pages 并按 GUIDE「真实收集宾客登记」配置 KV 后，改为 '/api/rsvp'
+  //    即可真实收集登记信息（网络异常时自动回落本机保存，下次打开自动补发）。
+  rsvpEndpoint: '',
 }

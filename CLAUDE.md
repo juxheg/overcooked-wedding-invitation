@@ -25,7 +25,7 @@ python3 scripts/optimize_assets.py
 
 ## 架构
 
-页面完全位于 `public/` 内。根目录 `index.html` 只是跳转到 `./public/` 的重定向页（GitHub Pages 从仓库根目录部署）。`raw-sources/` 存放未压缩的原始图片，页面不使用。
+页面完全位于 `public/` 内。根目录 `index.html` 只是跳转到 `./public/` 的重定向页（GitHub Pages 从仓库根目录部署）。`raw-sources/` 存放未压缩的原始图片，页面不使用。`edge-functions/api/` 存放 EdgeOne Pages 边缘函数（`rsvp.js` 提交登记、`rsvps.js` 查看导出，仅当 config.js 配置 `rsvpEndpoint` 时被前端调用；文件路径即 URL 路由）。
 
 **配置驱动渲染。** `public/config.js` 定义 `window.WEDDING_INVITATION`——所有用户可编辑内容。`app.js` 中的运行时契约：
 
@@ -37,13 +37,13 @@ python3 scripts/optimize_assets.py
 
 **CSP 很严格**（见 `public/_headers`）：`script-src 'self'; style-src 'self'`——任何地方都不允许内联 `<script>`、内联 `style` 或 `on*` 事件属性。图片回退使用 `data-fallback-src` 属性 + `error` 事件监听（webp → png/jpg），绝不用内联 `onerror`。出现内联事件处理器时 `check_static.py` 会直接报错。
 
-**localStorage 键名**（全部包在 try/catch 里—— Safari 无痕模式会抛异常）：`oc_wedding_rsvp`（表单数据）、`oc_wedding_best`（游戏最高分）、`oc_wedding_last`（最近一局结果）。
+**localStorage 键名**（全部包在 try/catch 里—— Safari 无痕模式会抛异常）：`oc_wedding_rsvp`（表单数据，端点模式下含 `_synced` 布尔标记）、`oc_wedding_client`（32 位十六进制设备标识，服务端 KV 记录的 key）、`oc_wedding_best`（游戏最高分）、`oc_wedding_last`（最近一局结果）。
 
 **缓存刷新。** `style.css`、`app.js`、`config.js` 在 `public/index.html` 中以 `?v=YYYYMMDD-…` 查询串加载——修改这些文件时必须同步更新版本号，否则访客会看到旧缓存。
 
 ## 硬性约束
 
-- **RSVP 仅为本机演示，这是设计决定。** 宾客数据只保存在访客自己的浏览器 localStorage 中。绝不添加上传服务器、提交第三方、管理后台或导出功能——这一承诺在 README/GUIDE/AI_SETUP_PROMPT 中反复声明，是模板的隐私契约。
+- **RSVP 默认仅为本机演示，这是设计决定。** 默认（`rsvpEndpoint: ''`）宾客数据只保存在访客自己的浏览器 localStorage 中。唯一的例外是仓库自带的 EdgeOne Pages 边缘函数（`edge-functions/api/`），必须由用户自己部署并显式配置 `rsvpEndpoint: '/api/rsvp'` 才会开启，数据存用户自己的 KV。不得默认开启、不得改为第三方服务、不添加管理后台——这一承诺在 README/GUIDE/AI_SETUP_PROMPT 中声明，是模板的隐私契约。
 - **所有用户可编辑文案集中在 `config.js`。** 定制时不要把个性化文字散落到 HTML/CSS/JS。例外：`public/index.html` 中的 `<title>`、Open Graph / Twitter meta 标签和首屏回退文案是硬编码的，定制时必须与配置同步修改（它们为爬虫/微信分享复制了配置内容）。
 - **`dateTime` 必须保持带时区偏移的 ISO 8601 格式**（`2030-10-01T18:30:00+08:00`）——倒计时用 `new Date()` 解析它。
 - **素材版权：** 代码采用 MIT，但 `public/assets/` 中的胡闹厨房游戏美术/音乐**不在** MIT 授权范围内，不可再分发。不要新增第三方素材；用原创或已授权素材替换是文档中明确建议的做法（见 COPYRIGHT_NOTICE.md、THIRD_PARTY_ASSETS.md）。

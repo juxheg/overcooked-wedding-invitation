@@ -499,10 +499,45 @@
     const editBtn = $('#rsvp-edit');
     const errEl = $('#rsvp-error');
     const messageCount = $('#message-count');
+    const notice = $('.demo-notice');
     const messageField = form && form.querySelector('textarea[name="message"]');
     const attendanceDetails = $('#attendance-details');
 
     if (!form) return;
+
+    // 登记端点：config.js 里留空 = 仅本机演示（模板默认，不上传）；
+    // 配置 '/api/rsvp'（EdgeOne Pages 部署）后，提交会真实发送给新人。
+    const endpoint = (() => {
+      const v = CFG.rsvpEndpoint;
+      if (typeof v !== 'string') return '';
+      const t = v.trim();
+      if (/^https:\/\//.test(t) || /^\/[a-z0-9\-_/.]*$/i.test(t)) return t;
+      return '';
+    })();
+
+    // 设备标识：32 位十六进制。服务端以它作为登记记录的 key，同一设备重复提交即覆盖（= 修改登记）。
+    const clientId = (() => {
+      try {
+        const CLIENT_KEY = 'oc_wedding_client';
+        const HEX_RE = /^[0-9a-f]{32}$/;
+        let id = localStorage.getItem(CLIENT_KEY);
+        if (id && HEX_RE.test(id)) return id;
+        if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+          id = window.crypto.randomUUID().replace(/-/g, '');
+        } else if (window.crypto && typeof window.crypto.getRandomValues === 'function') {
+          id = Array.from(window.crypto.getRandomValues(new Uint8Array(16)),
+            (b) => b.toString(16).padStart(2, '0')).join('');
+        }
+        if (id && HEX_RE.test(id)) { try { localStorage.setItem(CLIENT_KEY, id); } catch (_) {} return id; }
+      } catch (_) {}
+      return '';
+    })();
+
+    if (endpoint && notice) {
+      notice.textContent = '信息将直接发送给新人，仅用于婚礼接待安排；带 * 的项目为必填项。';
+      const badge = $('#rsvp-mode-badge');
+      if (badge) badge.textContent = '在线登记';
+    }
 
     const setAttendanceState = () => {
       const attending = form.querySelector('input[name="attending"]:checked')?.value === 'yes';
@@ -524,8 +559,9 @@
       });
     }
 
-    // 仅本机演示：不请求接口、不跳转第三方，数据只保存在当前浏览器。
+    // 本机保存：未配置端点时的唯一存储（演示模式）；配置端点后作为网络异常时的兜底。
     const KEY = 'oc_wedding_rsvp';
+    const saveLocal = (data) => { try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (_) {} };
     const saved = (() => { try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (_) { return null; } })();
     if (saved && typeof saved === 'object') {
       Object.entries(saved).forEach(([k, v]) => {
@@ -538,19 +574,35 @@
         }
       });
       if (saved.message && messageCount) messageCount.textContent = String(saved.message.length);
-      showSuccess(saved);
+      showSuccess(saved, endpoint ? saved._synced === true : undefined);
+      // 上次未能送达的登记（或切换端点前的历史数据），打开页面时静默补发
+      if (endpoint && clientId && saved._synced !== true) syncQuietly();
     }
 
-    form.addEventListener('submit', (e) => {
+    form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const data = Object.fromEntries(new FormData(form).entries());
       if (!data.guestName || !data.attending) {
         if (errEl) { errEl.textContent = '请填写姓名并选择是否赴约。'; errEl.hidden = false; }
         return;
       }
-      try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (_) {}
       if (errEl) errEl.hidden = true;
-      showSuccess(data);
+
+      // 蜜罐命中：视作已受理，不保存也不发送
+      if (typeof data.website === 'string' && data.website.trim() !== '') {
+        showSuccess(data, endpoint ? true : undefined);
+        return;
+      }
+
+      let synced = false;
+      if (endpoint && clientId) {
+        const btn = form.querySelector('button[type="submit"]');
+        if (btn) btn.disabled = true;
+        synced = await send(data);
+        if (btn) btn.disabled = false;
+      }
+      saveLocal(Object.assign({}, data, endpoint ? { _synced: synced } : {}));
+      showSuccess(data, endpoint ? synced : undefined);
     });
 
     if (editBtn) editBtn.addEventListener('click', () => {
@@ -559,13 +611,55 @@
       window.scrollTo({ top: form.offsetTop - 80, behavior: 'smooth' });
     });
 
-    function showSuccess(data) {
+    async function send(data) {
+      try {
+        const ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+        const timer = ctrl ? setTimeout(() => ctrl.abort(), 8000) : null;
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(Object.assign({}, data, { clientId })),
+          signal: ctrl ? ctrl.signal : undefined,
+        });
+        if (timer) clearTimeout(timer);
+        if (!res.ok) return false;
+        const payload = await res.json().catch(() => null);
+        return !!(payload && payload.ok);
+      } catch (_) {
+        return false;
+      }
+    }
+
+    async function syncQuietly() {
+      const data = Object.assign({}, saved);
+      delete data._synced;
+      if (!await send(data)) return;
+      try {
+        const latest = JSON.parse(localStorage.getItem(KEY) || 'null');
+        if (latest && typeof latest === 'object') {
+          latest._synced = true;
+          localStorage.setItem(KEY, JSON.stringify(latest));
+        }
+      } catch (_) {}
+      showSuccess(data, true);
+    }
+
+    function showSuccess(data, synced) {
       if (!success || !summary) return;
       form.hidden = true;
       const partyText = data.attending === 'yes' ? ` · ${data.partySize || '1'} 人` : '';
-      summary.textContent = `${data.guestName} · ${data.attending === 'yes' ? '已确认赴约' : '遗憾缺席'}${partyText}。记录仅保存在此浏览器中。`;
+      const base = `${data.guestName} · ${data.attending === 'yes' ? '已确认赴约' : '遗憾缺席'}${partyText}`;
       const title = $('#rsvp-success-title');
-      if (title) title.textContent = '演示登记已保存';
+      if (endpoint && synced === false) {
+        if (title) title.textContent = '已先保存到本机';
+        summary.textContent = `${base}。网络不稳定，登记已先保存在此设备，下次打开页面会自动重试发送。`;
+      } else if (endpoint) {
+        if (title) title.textContent = '登记成功';
+        summary.textContent = `${base}。已送达新人，婚礼见！`;
+      } else {
+        if (title) title.textContent = '演示登记已保存';
+        summary.textContent = `${base}。记录仅保存在此浏览器中。`;
+      }
       success.hidden = false;
     }
   }
